@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environment
+venv/
+
+# Environment variables
+.env
+
+# Uploaded images
+uploads/
+
+# YOLO weights cache
+*.pt
+
+# OS
+.DS_Store
+Thumbs.db

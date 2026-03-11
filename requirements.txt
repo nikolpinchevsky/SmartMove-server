@@ -1,0 +1,10 @@
+fastapi # create API 
+uvicorn[standard] # run API server
+motor # MongoDB driver
+python-jose[cryptography] # JWT handling
+passlib[bcrypt] # Password hashing
+bcrypt==4.0.1
+pydantic[email] # Data validation
+python-dotenv # Environment variable management
+python-multipart # Handle multipart/form-data for file uploads
+ultralytics # For AI image analysis (YOLOv8)
