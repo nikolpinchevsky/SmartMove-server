@@ -23,7 +23,7 @@ from app.models import (
 )
 from app.auth import hash_password, verify_password, create_access_token
 from app.deps import get_current_user
-from app.utils import now_utc, generate_qr_identifier, analyze_box_image
+from app.utils import now_utc, analyze_box_image
 
 app = FastAPI(title="SmartMove API")
 
@@ -32,7 +32,17 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
+# ---------- MongoDB Indexes ----------
+# Run once when the server starts
+@app.on_event("startup")
+async def startup_indexes():
+    await boxes_collection.create_index("qr_identifier", unique=True)
+    await boxes_collection.create_index(
+        [("project_id", 1), ("box_number", 1)],
+        unique=True
+    )
 
+    
 def parse_object_id(id_value: str) -> ObjectId:
     """
     Safely convert string ID into MongoDB ObjectId.
@@ -300,9 +310,10 @@ async def create_box(payload: BoxCreateRequest, current_user=Depends(get_current
 
     Steps:
     1. Verify that the project exists and belongs to the current user
-    2. Generate unique QR identifier
-    3. Insert box into MongoDB
-    4. Return created box data
+    2. Generate the next box_number inside this project
+    3. Generate unique QR identifier
+    4. Insert box into MongoDB
+    5. Return created box data
     """
 
     project_object_id = parse_object_id(payload.project_id)
@@ -316,13 +327,24 @@ async def create_box(payload: BoxCreateRequest, current_user=Depends(get_current
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Generate a unique QR code identifier for this box
-    qr_identifier = generate_qr_identifier()
+    # Find last box number in this project
+    last_box = await boxes_collection.find_one(
+        {"project_id": payload.project_id, "user_id": current_user["user_id"]},
+        sort=[("box_number", -1)]
+    )
+
+    next_box_number = 1
+    if last_box and "box_number" in last_box:
+        next_box_number = last_box["box_number"] + 1
+
+    # Generate unique QR code identifier for this box
+    qr_identifier = f"SM-{payload.project_id}-{next_box_number}-{uuid.uuid4().hex[:8]}"
 
     # Prepare new box document
     new_box = {
         "user_id": current_user["user_id"],
         "project_id": payload.project_id,
+        "box_number": next_box_number,
         "name": payload.name,
         "fragile": payload.fragile,
         "valuable": payload.valuable,
@@ -344,6 +366,7 @@ async def create_box(payload: BoxCreateRequest, current_user=Depends(get_current
     return {
         "id": str(result.inserted_id),
         "project_id": payload.project_id,
+        "box_number": next_box_number,
         "name": payload.name,
         "fragile": payload.fragile,
         "valuable": payload.valuable,
@@ -417,6 +440,7 @@ async def list_boxes(
         boxes.append({
             "id": str(box["_id"]),
             "project_id": box["project_id"],
+            "box_number": box.get("box_number"),
             "name": box["name"],
             "fragile": box["fragile"],
             "valuable": box["valuable"],
@@ -451,6 +475,7 @@ async def get_box_by_id(box_id: str, current_user=Depends(get_current_user)):
     return {
         "id": str(box["_id"]),
         "project_id": box["project_id"],
+        "box_number": box.get("box_number"),
         "name": box["name"],
         "fragile": box["fragile"],
         "valuable": box["valuable"],
@@ -485,6 +510,7 @@ async def get_box_by_qr(qr_identifier: str, current_user=Depends(get_current_use
     return {
         "id": str(box["_id"]),
         "project_id": box["project_id"],
+        "box_number": box.get("box_number"),
         "name": box["name"],
         "fragile": box["fragile"],
         "valuable": box["valuable"],
@@ -537,6 +563,7 @@ async def get_priority_opening_list(
     async for box in cursor:
         boxes.append({
             "id": str(box["_id"]),
+            "box_number": box.get("box_number"),
             "name": box["name"],
             "destination_room": box["destination_room"],
             "priority_color": box["priority_color"],
@@ -598,6 +625,7 @@ async def update_box(
     return {
         "id": str(updated_box["_id"]),
         "project_id": updated_box["project_id"],
+        "box_number": updated_box.get("box_number"),
         "name": updated_box["name"],
         "fragile": updated_box["fragile"],
         "valuable": updated_box["valuable"],
@@ -942,6 +970,7 @@ async def apply_ai_suggestions(
         "box": {
             "id": str(updated_box["_id"]),
             "project_id": updated_box["project_id"],
+            "box_number": updated_box.get("box_number"),
             "name": updated_box["name"],
             "fragile": updated_box["fragile"],
             "valuable": updated_box["valuable"],

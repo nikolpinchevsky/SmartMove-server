@@ -4,7 +4,8 @@ from ultralytics import YOLO
 
 
 # load YOLO model once
-model = YOLO("yolov8n.pt")
+# model = YOLO("yolov8m.pt")
+model = YOLO("yolov8s.pt")
 
 # Return current UTC datetime
 # Used for created_at / updated_at fields 
