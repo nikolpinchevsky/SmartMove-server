@@ -8,3 +8,4 @@ pydantic[email] # Data validation
 python-dotenv # Environment variable management
 python-multipart # Handle multipart/form-data for file uploads
 ultralytics # For AI image analysis (YOLOv8)
+opencv-python-headless # For image processing without GUI support
