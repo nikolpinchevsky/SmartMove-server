@@ -75,10 +75,3 @@ class BoxStatusUpdateRequest(BaseModel):
     status: BoxStatus
 
 
-# ---------- AI Models ----------
-# Request body for saving AI analysis results for a box
-class AiSuggestionRequest(BaseModel):
-    detected_categories: list[str] = Field(default_factory=list)
-    suggested_fragile: bool
-    suggested_valuable: bool
-    approved: bool

@@ -19,7 +19,6 @@ from app.models import (
     BoxCreateRequest,
     BoxUpdateRequest,
     BoxStatusUpdateRequest,
-    AiSuggestionRequest
 )
 from app.auth import hash_password, verify_password, create_access_token
 from app.deps import get_current_user
@@ -681,66 +680,6 @@ async def update_box_status(
     }
 
 
-# ---------- Save AI ----------
-@app.post("/boxes/{box_id}/ai-suggestions")
-async def save_ai_suggestions(
-    box_id: str,
-    payload: AiSuggestionRequest,
-    current_user=Depends(get_current_user)
-):
-    """
-    Save AI analysis results for a box.
-
-    Behavior:
-    - Save AI metadata inside the box document
-    - If the user approved the suggestion,
-      update fragile/valuable fields as well
-    """
-
-    box_object_id = parse_object_id(box_id)
-
-    # Make sure the box exists and belongs to the current user
-    box = await boxes_collection.find_one({
-        "_id": box_object_id,
-        "user_id": current_user["user_id"]
-    })
-
-    if not box:
-        raise HTTPException(status_code=404, detail="Box not found")
-
-    # Build AI metadata object
-    ai_metadata = {
-        "detected_categories": payload.detected_categories,
-        "suggested_fragile": payload.suggested_fragile,
-        "suggested_valuable": payload.suggested_valuable,
-        "approved": payload.approved,
-        "saved_at": now_utc()
-    }
-
-    # Build update object
-    update_fields = {
-        "ai_metadata": ai_metadata,
-        "updated_at": now_utc()
-    }
-
-    # If user approved AI result, update box flags
-    if payload.approved:
-        update_fields["fragile"] = payload.suggested_fragile
-        update_fields["valuable"] = payload.suggested_valuable
-
-    # Save AI metadata in the box document
-    await boxes_collection.update_one(
-        {"_id": box_object_id},
-        {"$set": update_fields}
-    )
-
-    # Return success response
-    return {
-        "ok": True,
-        "ai_metadata": ai_metadata
-    }
-
-
 # ---------- Upload Box Image ----------
 # Upload image for a specific box
 # Save the file locally and store image URL in MongoDB
@@ -803,45 +742,36 @@ async def upload_box_image(
     }
 
 
-# ---------- Analyze Box Image ----------
-# Run AI analysis on previously uploaded box image
-# Save AI metadata in the box document
-@app.post("/boxes/{box_id}/analyze-image")
-async def analyze_uploaded_box_image(
-    box_id: str,
+# ---------- Analyze Image For New Box Form ----------
+@app.post("/ai/analyze-box-image")
+async def analyze_box_image_for_form(
+    file: UploadFile = File(...),
     current_user=Depends(get_current_user)
 ):
-    box_object_id = parse_object_id(box_id)
+    """
+    Analyze an uploaded image before creating a box.
+    Returns form suggestions only, without requiring box_id
+    and without creating/saving a box yet.
+    """
 
-    box = await boxes_collection.find_one({
-        "_id": box_object_id,
-        "user_id": current_user["user_id"]
-    })
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image files are allowed")
 
-    if not box:
-        raise HTTPException(status_code=404, detail="Box not found")
+    allowed_types = ["image/jpeg", "image/jpg", "image/png"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail="Only JPG, JPEG, and PNG image files are allowed"
+        )
 
-    image_url = box.get("image_url")
-    if not image_url:
-        return {
-            "ok": False,
-            "message": "No image uploaded for this box. Please fill the form manually.",
-            "form_suggestions": None,
-            "ai_metadata": None
-        }
-
-    file_name = image_url.split("/")[-1]
-    file_path = os.path.join(UPLOAD_DIR, file_name)
-
-    if not os.path.exists(file_path):
-        return {
-            "ok": False,
-            "message": "Uploaded image file not found. Please fill the form manually.",
-            "form_suggestions": None,
-            "ai_metadata": None
-        }
+    file_extension = os.path.splitext(file.filename)[1] if file.filename else ".jpg"
+    temp_file_name = f"temp_{uuid.uuid4().hex}{file_extension}"
+    file_path = os.path.join(UPLOAD_DIR, temp_file_name)
 
     try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
         result = analyze_box_image(file_path)
 
         if not result["items"]:
@@ -869,16 +799,6 @@ async def analyze_uploaded_box_image(
             "saved_at": now_utc()
         }
 
-        await boxes_collection.update_one(
-            {"_id": box_object_id},
-            {
-                "$set": {
-                    "ai_metadata": ai_metadata,
-                    "updated_at": now_utc()
-                }
-            }
-        )
-
         return {
             "ok": True,
             "message": "AI analysis completed successfully.",
@@ -900,88 +820,7 @@ async def analyze_uploaded_box_image(
             "form_suggestions": None,
             "ai_metadata": None
         }
-    
 
-# ---------- Apply AI Suggestions ----------
-# Apply AI-generated suggestions to the actual box fields
-@app.post("/boxes/{box_id}/apply-ai-suggestions")
-async def apply_ai_suggestions(
-    box_id: str,
-    current_user=Depends(get_current_user)
-):
-    box_object_id = parse_object_id(box_id)
-
-    # Check that the box exists and belongs to current user
-    box = await boxes_collection.find_one({
-        "_id": box_object_id,
-        "user_id": current_user["user_id"]
-    })
-
-    if not box:
-        raise HTTPException(status_code=404, detail="Box not found")
-
-    ai_metadata = box.get("ai_metadata")
-    if not ai_metadata:
-        raise HTTPException(status_code=400, detail="No AI suggestions available for this box")
-
-    suggested_box_name = ai_metadata.get("suggested_box_name")
-    suggested_destination_room = ai_metadata.get("suggested_destination_room")
-    suggested_priority_color = ai_metadata.get("suggested_priority_color")
-    suggested_fragile = ai_metadata.get("suggested_fragile")
-    suggested_valuable = ai_metadata.get("suggested_valuable")
-    detected_categories = ai_metadata.get("detected_categories", [])
-
-    updates = {
-        "updated_at": now_utc()
-    }
-
-    if suggested_box_name:
-        updates["name"] = suggested_box_name
-
-    if suggested_destination_room:
-        updates["destination_room"] = suggested_destination_room
-
-    if suggested_priority_color:
-        updates["priority_color"] = suggested_priority_color
-
-    if suggested_fragile is not None:
-        updates["fragile"] = suggested_fragile
-
-    if suggested_valuable is not None:
-        updates["valuable"] = suggested_valuable
-
-    if detected_categories is not None:
-        updates["items"] = detected_categories
-
-    # Mark AI metadata as approved
-    ai_metadata["approved"] = True
-    updates["ai_metadata"] = ai_metadata
-
-    await boxes_collection.update_one(
-        {"_id": box_object_id},
-        {"$set": updates}
-    )
-
-    updated_box = await boxes_collection.find_one({"_id": box_object_id})
-
-    return {
-        "ok": True,
-        "message": "AI suggestions were applied successfully.",
-        "box": {
-            "id": str(updated_box["_id"]),
-            "project_id": updated_box["project_id"],
-            "box_number": updated_box.get("box_number"),
-            "name": updated_box["name"],
-            "fragile": updated_box["fragile"],
-            "valuable": updated_box["valuable"],
-            "priority_color": updated_box["priority_color"],
-            "destination_room": updated_box["destination_room"],
-            "items": updated_box.get("items", []),
-            "status": updated_box["status"],
-            "qr_identifier": updated_box["qr_identifier"],
-            "image_url": updated_box.get("image_url"),
-            "ai_metadata": updated_box.get("ai_metadata"),
-            "created_at": updated_box.get("created_at"),
-            "updated_at": updated_box.get("updated_at")
-        }
-    }
+    finally:
+        if os.path.exists(file_path):
+            os.remove(file_path)
