@@ -5,7 +5,13 @@ from ultralytics import YOLO
 
 # load YOLO model once
 # model = YOLO("yolov8m.pt")
-model = YOLO("yolov8s.pt")
+model = None
+
+def get_model():
+    global model
+    if model is None:
+        model = YOLO("yolov8s.pt")
+    return model
 
 # Return current UTC datetime
 # Used for created_at / updated_at fields 
@@ -24,14 +30,15 @@ def analyze_box_image(image_path: str) -> dict:
     Returns auto-filled form suggestions.
     """
 
-    results = model(image_path)
+    current_model = get_model()
+    results = current_model(image_path)
 
     detected = []
 
     for r in results:
         if r.boxes is not None:
             for c in r.boxes.cls:
-                label = model.names[int(c)]
+                label = current_model.names[int(c)]
                 detected.append(label)
 
     # Remove duplicates
@@ -43,7 +50,6 @@ def analyze_box_image(image_path: str) -> dict:
     suggested_fragile = any(obj in detected for obj in fragile_objects)
     suggested_valuable = any(obj in detected for obj in valuable_objects)
 
-    # Suggested room
     if any(obj in detected for obj in ["cup", "bottle", "wine glass", "fork", "knife", "spoon"]):
         destination_room = "kitchen"
         box_name = "Kitchen Essentials"
@@ -60,7 +66,6 @@ def analyze_box_image(image_path: str) -> dict:
         destination_room = "general"
         box_name = "General Box"
 
-    # Suggested priority
     if suggested_fragile or suggested_valuable:
         priority_color = "red"
     elif detected:

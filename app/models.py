@@ -75,3 +75,4 @@ class BoxStatusUpdateRequest(BaseModel):
     status: BoxStatus
 
 
+    
