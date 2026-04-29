@@ -75,4 +75,8 @@ class BoxStatusUpdateRequest(BaseModel):
     status: BoxStatus
 
 
-    
+# ---------- Room Models ----------
+class RoomCreateRequest(BaseModel):
+    project_id: str
+    name: str = Field(..., min_length=1, max_length=100) 
+

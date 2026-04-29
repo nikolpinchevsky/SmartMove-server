@@ -9,7 +9,7 @@ import os
 import shutil
 import uuid
 
-from app.db import users_collection, projects_collection, boxes_collection
+from app.db import users_collection, projects_collection, boxes_collection, rooms_collection
 from app.models import (
     UserRegisterRequest,
     UserLoginRequest,
@@ -19,6 +19,7 @@ from app.models import (
     BoxCreateRequest,
     BoxUpdateRequest,
     BoxStatusUpdateRequest,
+    RoomCreateRequest
 )
 from app.auth import hash_password, verify_password, create_access_token
 from app.deps import get_current_user
@@ -38,6 +39,10 @@ async def startup_indexes():
     await boxes_collection.create_index("qr_identifier", unique=True)
     await boxes_collection.create_index(
         [("project_id", 1), ("box_number", 1)],
+        unique=True
+    )
+    await rooms_collection.create_index(
+        [("user_id", 1), ("project_id", 1), ("name_lower", 1)],
         unique=True
     )
 
@@ -180,6 +185,21 @@ async def create_project(payload: ProjectCreateRequest, current_user=Depends(get
     # Insert project into database
     result = await projects_collection.insert_one(new_project)
 
+    # Create default rooms for this project
+    default_rooms = ["Kitchen", "Living Room", "Bedroom", "Bathroom", "Office"]
+
+    await rooms_collection.insert_many([
+        {
+            "user_id": current_user["user_id"],
+            "project_id": str(result.inserted_id),
+            "name": room,
+            "name_lower": room.lower(),
+            "created_at": now_utc(),
+            "updated_at": now_utc()
+        }
+        for room in default_rooms
+    ])
+
     # Return created project info
     return {
         "id": str(result.inserted_id),
@@ -300,6 +320,85 @@ async def update_project(
         "updated_at": updated_project.get("updated_at")
     }
 
+# ---------- Rooms ----------
+@app.post("/rooms")
+async def create_room(payload: RoomCreateRequest, current_user=Depends(get_current_user)):
+    project_object_id = parse_object_id(payload.project_id)
+
+    project = await projects_collection.find_one({
+        "_id": project_object_id,
+        "user_id": current_user["user_id"]
+    })
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    room_name = payload.name.strip()
+
+    if not room_name:
+        raise HTTPException(status_code=400, detail="Room name cannot be empty")
+
+    existing_room = await rooms_collection.find_one({
+        "user_id": current_user["user_id"],
+        "project_id": payload.project_id,
+        "name_lower": room_name.lower()
+    })
+
+    if existing_room:
+        raise HTTPException(status_code=400, detail="Room already exists")
+
+    new_room = {
+        "user_id": current_user["user_id"],
+        "project_id": payload.project_id,
+        "name": room_name,
+        "name_lower": room_name.lower(),
+        "created_at": now_utc(),
+        "updated_at": now_utc()
+    }
+
+    result = await rooms_collection.insert_one(new_room)
+
+    return {
+        "id": str(result.inserted_id),
+        "project_id": payload.project_id,
+        "name": room_name
+    }
+
+
+@app.get("/rooms")
+async def list_rooms(
+    project_id: str | None = Query(default=None),
+    current_user=Depends(get_current_user)
+):
+    query = {"user_id": current_user["user_id"]}
+
+    if project_id:
+        query["project_id"] = project_id
+    else:
+        active_project = await projects_collection.find_one({
+            "user_id": current_user["user_id"],
+            "is_active": True
+        })
+
+        if not active_project:
+            return {"rooms": []}
+
+        query["project_id"] = str(active_project["_id"])
+
+    cursor = rooms_collection.find(query).sort("name", 1)
+
+    rooms = []
+
+    async for room in cursor:
+        rooms.append({
+            "id": str(room["_id"]),
+            "project_id": room["project_id"],
+            "name": room["name"],
+            "created_at": room.get("created_at"),
+            "updated_at": room.get("updated_at")
+        })
+
+    return {"rooms": rooms}
 
 # ---------- Create Box ----------
 @app.post("/boxes")
