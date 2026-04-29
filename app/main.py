@@ -186,7 +186,7 @@ async def create_project(payload: ProjectCreateRequest, current_user=Depends(get
     result = await projects_collection.insert_one(new_project)
 
     # Create default rooms for this project
-    default_rooms = ["Kitchen", "Living Room", "Bedroom", "Bathroom", "Office"]
+    default_rooms = ["Kitchen", "Living Room", "Bathroom"]
 
     await rooms_collection.insert_many([
         {
