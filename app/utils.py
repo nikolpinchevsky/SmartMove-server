@@ -1,37 +1,59 @@
 from datetime import datetime, timezone
 import uuid
-from ultralytics import YOLO
+from ultralytics import YOLOWorld
 
 
-# load YOLO model once
-# model = YOLO("yolov8m.pt")
 model = None
+
+
+AI_CLASSES = [
+    # kitchen
+    "plate", "plates", "bowl", "bowls", "cup", "cups", "glass", "glasses",
+    "wine glass", "bottle", "fork", "knife", "spoon", "pan", "pot",
+    "kettle", "toaster", "microwave", "oven",
+
+    # clothes / bedroom
+    "shirt", "t-shirt", "pants", "jeans", "shorts", "dress", "skirt",
+    "jacket", "coat", "sweater", "hoodie", "socks", "underwear",
+    "bra", "pajamas", "shoes", "sneakers", "hat", "cap", "scarf",
+    "belt", "blanket", "pillow", "sheet", "towel",
+
+    # electronics / office
+    "laptop", "keyboard", "mouse", "cell phone", "phone", "tablet",
+    "monitor", "charger", "cable", "headphones", "speaker", "remote",
+    "camera", "book", "notebook", "paper", "pen", "pencil", "printer",
+
+    # home
+    "tv", "chair", "couch", "sofa", "lamp", "vase", "frame",
+    "picture frame", "clock", "toy", "teddy bear", "backpack",
+    "handbag", "suitcase", "bag", "box", "umbrella"
+]
+
 
 def get_model():
     global model
     if model is None:
-        model = YOLO("yolov8s.pt")
+        model = YOLOWorld("yolov8l-worldv2.pt")
+        model.set_classes(AI_CLASSES)
     return model
 
-# Return current UTC datetime
-# Used for created_at / updated_at fields 
+
 def now_utc():
     return datetime.now(timezone.utc)
 
-#  Generate unique identifier for box QR
+
 def generate_qr_identifier() -> str:
     return f"BOX-{uuid.uuid4().hex[:10].upper()}"
 
 
-# Analyze uploaded image 
 def analyze_box_image(image_path: str) -> dict:
-    """
-    Analyze uploaded image using YOLO object detection.
-    Returns auto-filled form suggestions.
-    """
-
     current_model = get_model()
-    results = current_model(image_path)
+
+    results = current_model.predict(
+        image_path,
+        conf=0.08,
+        imgsz=960
+    )
 
     detected = []
 
@@ -41,30 +63,78 @@ def analyze_box_image(image_path: str) -> dict:
                 label = current_model.names[int(c)]
                 detected.append(label)
 
-    # Remove duplicates
-    detected = list(set(detected))
+    detected = sorted(list(set(detected)))
 
-    fragile_objects = ["cup", "wine glass", "bottle", "vase"]
-    valuable_objects = ["tv", "laptop", "cell phone", "keyboard", "remote", "mouse"]
+    room_rules = {
+        "kitchen": [
+            "plate", "plates", "bowl", "bowls", "cup", "cups", "glass", "glasses",
+            "wine glass", "bottle", "fork", "knife", "spoon", "pan", "pot",
+            "kettle", "toaster", "microwave", "oven"
+        ],
+        "bedroom": [
+            "shirt", "t-shirt", "pants", "jeans", "shorts", "dress", "skirt",
+            "jacket", "coat", "sweater", "hoodie", "socks", "underwear",
+            "bra", "pajamas", "shoes", "sneakers", "hat", "cap", "scarf",
+            "belt", "blanket", "pillow", "sheet", "towel", "suitcase"
+        ],
+        "office": [
+            "laptop", "keyboard", "mouse", "cell phone", "phone", "tablet",
+            "monitor", "charger", "cable", "headphones", "book", "notebook",
+            "paper", "pen", "pencil", "printer", "camera"
+        ],
+        "living room": [
+            "tv", "remote", "speaker", "chair", "couch", "sofa",
+            "lamp", "vase", "frame", "picture frame", "clock"
+        ],
+        "bathroom": [
+            "towel"
+        ],
+        "kids room": [
+            "toy", "teddy bear"
+        ],
+        "storage": [
+            "backpack", "handbag", "bag", "box", "umbrella"
+        ]
+    }
+
+    fragile_objects = [
+        "plate", "plates", "bowl", "bowls", "cup", "cups", "glass", "glasses",
+        "wine glass", "bottle", "vase", "tv", "laptop", "cell phone",
+        "phone", "tablet", "monitor", "camera", "lamp", "frame",
+        "picture frame"
+    ]
+
+    valuable_objects = [
+        "tv", "laptop", "cell phone", "phone", "tablet", "monitor",
+        "keyboard", "mouse", "remote", "camera", "headphones",
+        "speaker", "charger"
+    ]
 
     suggested_fragile = any(obj in detected for obj in fragile_objects)
     suggested_valuable = any(obj in detected for obj in valuable_objects)
 
-    if any(obj in detected for obj in ["cup", "bottle", "wine glass", "fork", "knife", "spoon"]):
-        destination_room = "kitchen"
-        box_name = "Kitchen Essentials"
-    elif any(obj in detected for obj in ["tv", "remote", "chair"]):
-        destination_room = "living room"
-        box_name = "Living Room Items"
-    elif any(obj in detected for obj in ["laptop", "keyboard", "mouse", "book"]):
-        destination_room = "office"
-        box_name = "Office Items"
-    elif any(obj in detected for obj in ["bed", "clock"]):
-        destination_room = "bedroom"
+    destination_room = "general"
+    box_name = "General Box"
+
+    for room, objects in room_rules.items():
+        if any(obj in detected for obj in objects):
+            destination_room = room
+            break
+
+    if destination_room == "kitchen":
+        box_name = "Kitchen Items"
+    elif destination_room == "bedroom":
         box_name = "Bedroom Items"
-    else:
-        destination_room = "general"
-        box_name = "General Box"
+    elif destination_room == "office":
+        box_name = "Office Items"
+    elif destination_room == "living room":
+        box_name = "Living Room Items"
+    elif destination_room == "bathroom":
+        box_name = "Bathroom Items"
+    elif destination_room == "kids room":
+        box_name = "Kids Room Items"
+    elif destination_room == "storage":
+        box_name = "Storage Items"
 
     if suggested_fragile or suggested_valuable:
         priority_color = "red"
@@ -73,10 +143,7 @@ def analyze_box_image(image_path: str) -> dict:
     else:
         priority_color = "green"
 
-    if detected:
-        reason = f"Detected objects: {detected}"
-    else:
-        reason = "No recognizable objects detected in the image."
+    reason = f"Detected objects: {detected}" if detected else "No recognizable objects detected in the image."
 
     return {
         "box_name": box_name,

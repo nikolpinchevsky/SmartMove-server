@@ -778,69 +778,6 @@ async def update_box_status(
         "status": payload.status.value
     }
 
-
-# ---------- Upload Box Image ----------
-# Upload image for a specific box
-# Save the file locally and store image URL in MongoDB
-@app.post("/boxes/{box_id}/upload-image")
-async def upload_box_image(
-    box_id: str,
-    file: UploadFile = File(...),
-    current_user=Depends(get_current_user)
-):
-
-    box_object_id = parse_object_id(box_id)
-
-    # Check that the box exists and belongs to current user
-    box = await boxes_collection.find_one({
-        "_id": box_object_id,
-        "user_id": current_user["user_id"]
-    })
-
-    if not box:
-        raise HTTPException(status_code=404, detail="Box not found")
-
-    # Validate file type
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Only image files are allowed")
-    
-    allowed_types = ["image/jpeg", "image/jpg", "image/png"]
-
-    if file.content_type not in allowed_types:
-        raise HTTPException(
-            status_code=400,
-            detail="Only JPG, JPEG, and PNG image files are allowed"
-    )
-
-    # Create unique file name
-    file_extension = os.path.splitext(file.filename)[1] if file.filename else ".jpg"
-    safe_file_name = f"{box_id}_{uuid.uuid4().hex}{file_extension}"
-    file_path = os.path.join(UPLOAD_DIR, safe_file_name)
-
-    # Save file to uploads directory
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    image_url = f"/uploads/{safe_file_name}"
-
-    # Save image path in box document
-    await boxes_collection.update_one(
-        {"_id": box_object_id},
-        {
-            "$set": {
-                "image_url": image_url,
-                "updated_at": now_utc()
-            }
-        }
-    )
-
-    return {
-        "ok": True,
-        "image_url": image_url,
-        "file_name": safe_file_name
-    }
-
-
 # ---------- Analyze Image For New Box Form ----------
 @app.post("/ai/analyze-box-image")
 async def analyze_box_image_for_form(
@@ -872,6 +809,10 @@ async def analyze_box_image_for_form(
             shutil.copyfileobj(file.file, buffer)
 
         result = analyze_box_image(file_path)
+
+        # Delete image after AI analysis
+        if os.path.exists(file_path):
+            os.remove(file_path)
 
         if not result["items"]:
             return {
