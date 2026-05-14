@@ -2,7 +2,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, HTTPException, Depends, Query, UploadFile, File
-from fastapi.staticfiles import StaticFiles
 from bson import ObjectId
 from bson.errors import InvalidId
 import os
@@ -26,11 +25,6 @@ from app.deps import get_current_user
 from app.utils import now_utc, analyze_box_image
 
 app = FastAPI(title="SmartMove API")
-
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # ---------- MongoDB Indexes ----------
 # Run once when the server starts
