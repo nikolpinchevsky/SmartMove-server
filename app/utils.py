@@ -9,25 +9,112 @@ model = None
 AI_CLASSES = [
     # kitchen
     "plate", "plates", "bowl", "bowls", "cup", "cups", "glass", "glasses",
-    "wine glass", "bottle", "fork", "knife", "spoon", "pan", "pot",
-    "kettle", "toaster", "microwave", "oven",
+    "mug", "mugs", "fork", "forks", "knife", "knives", "spoon", "spoons",
+    "pot", "pots", "pan", "pans", "bottle", "bottles",
+    "food container", "food containers", "kitchen towel", "kitchen towels",
 
-    # clothes / bedroom
-    "shirt", "t-shirt", "pants", "jeans", "shorts", "dress", "skirt",
-    "jacket", "coat", "sweater", "hoodie", "socks", "underwear",
-    "bra", "pajamas", "shoes", "sneakers", "hat", "cap", "scarf",
-    "belt", "blanket", "pillow", "sheet", "towel",
+    # bedroom / clothes
+    "t-shirt", "t-shirts", "shirt", "shirts", "long sleeve shirt", "long sleeve shirts",
+    "hoodie", "hoodies", "sweater", "sweaters", "jeans", "pants", "shorts",
+    "dress", "dresses", "skirt", "skirts", "sock", "socks", "underwear",
+    "bra", "bras", "pajamas", "jacket", "jackets", "coat", "coats",
+    "shoe", "shoes", "sneaker", "sneakers", "belt", "belts", "hat", "hats",
+    "blanket", "blankets", "pillow", "pillows", "bedsheet", "bedsheets",
+    "towel", "towels",
 
-    # electronics / office
-    "laptop", "keyboard", "mouse", "cell phone", "phone", "tablet",
-    "monitor", "charger", "cable", "headphones", "speaker", "remote",
-    "camera", "book", "notebook", "paper", "pen", "pencil", "printer",
+    # bathroom
+    "toothbrush", "toothbrushes", "toothpaste", "shampoo", "shampoos",
+    "soap", "soaps", "hair dryer", "hair dryers", "toilet paper",
 
-    # home
-    "tv", "chair", "couch", "sofa", "lamp", "vase", "frame",
-    "picture frame", "clock", "toy", "teddy bear", "backpack",
-    "handbag", "suitcase", "bag", "box", "umbrella"
+    # office / study
+    "laptop", "laptops", "keyboard", "keyboards", "mouse", "mice",
+    "charger", "chargers", "cable", "cables", "headphones",
+    "book", "books", "notebook", "notebooks", "document", "documents",
+    "folder", "folders",
+
+    # living room / home
+    "remote", "remotes", "speaker", "speakers", "lamp", "lamps",
+    "picture frame", "picture frames", "candle", "candles",
+    "vase", "vases", "decorations",
+
+    # kids room
+    "toy", "toys", "doll", "dolls", "teddy bear", "teddy bears",
+    "lego", "legos",
+
+    # storage / misc
+    "backpack", "backpacks", "handbag", "handbags", "suitcase", "suitcases",
+    "umbrella", "umbrellas", "bag", "bags"
 ]
+
+
+LABEL_MAP = {
+    "plate": "plates",
+    "bowl": "bowls",
+    "cup": "cups",
+    "glass": "glasses",
+    "mug": "mugs",
+    "fork": "forks",
+    "knife": "knives",
+    "spoon": "spoons",
+    "pot": "pots",
+    "pan": "pans",
+    "bottle": "bottles",
+    "food container": "food containers",
+    "kitchen towel": "kitchen towels",
+
+    "t-shirt": "t-shirts",
+    "shirt": "shirts",
+    "long sleeve shirt": "long sleeve shirts",
+    "hoodie": "hoodies",
+    "sweater": "sweaters",
+    "dress": "dresses",
+    "skirt": "skirts",
+    "sock": "socks",
+    "bra": "bras",
+    "jacket": "jackets",
+    "coat": "coats",
+    "shoe": "shoes",
+    "sneaker": "sneakers",
+    "belt": "belts",
+    "hat": "hats",
+    "blanket": "blankets",
+    "pillow": "pillows",
+    "bedsheet": "bedsheets",
+    "towel": "towels",
+
+    "toothbrush": "toothbrushes",
+    "shampoo": "shampoos",
+    "soap": "soaps",
+    "hair dryer": "hair dryers",
+
+    "laptop": "laptops",
+    "keyboard": "keyboards",
+    "mouse": "mice",
+    "charger": "chargers",
+    "cable": "cables",
+    "book": "books",
+    "notebook": "notebooks",
+    "document": "documents",
+    "folder": "folders",
+
+    "remote": "remotes",
+    "speaker": "speakers",
+    "lamp": "lamps",
+    "picture frame": "picture frames",
+    "candle": "candles",
+    "vase": "vases",
+
+    "toy": "toys",
+    "doll": "dolls",
+    "teddy bear": "teddy bears",
+    "lego": "legos",
+
+    "backpack": "backpacks",
+    "handbag": "handbags",
+    "suitcase": "suitcases",
+    "umbrella": "umbrellas",
+    "bag": "bags"
+}
 
 
 def get_model():
@@ -51,7 +138,7 @@ def analyze_box_image(image_path: str) -> dict:
 
     results = current_model.predict(
         image_path,
-        conf=0.08,
+        conf=0.25,
         imgsz=960
     )
 
@@ -61,53 +148,63 @@ def analyze_box_image(image_path: str) -> dict:
         if r.boxes is not None:
             for c in r.boxes.cls:
                 label = current_model.names[int(c)]
+                label = LABEL_MAP.get(label, label)
                 detected.append(label)
 
     detected = sorted(list(set(detected)))
 
     room_rules = {
         "kitchen": [
-            "plate", "plates", "bowl", "bowls", "cup", "cups", "glass", "glasses",
-            "wine glass", "bottle", "fork", "knife", "spoon", "pan", "pot",
-            "kettle", "toaster", "microwave", "oven"
+            "plates", "bowls", "cups", "glasses", "mugs",
+            "forks", "knives", "spoons",
+            "pots", "pans", "bottles",
+            "food containers", "kitchen towels"
         ],
+
         "bedroom": [
-            "shirt", "t-shirt", "pants", "jeans", "shorts", "dress", "skirt",
-            "jacket", "coat", "sweater", "hoodie", "socks", "underwear",
-            "bra", "pajamas", "shoes", "sneakers", "hat", "cap", "scarf",
-            "belt", "blanket", "pillow", "sheet", "towel", "suitcase"
+            "t-shirts", "shirts", "long sleeve shirts",
+            "hoodies", "sweaters", "jeans", "pants", "shorts",
+            "dresses", "skirts", "socks", "underwear", "bras",
+            "pajamas", "jackets", "coats", "shoes", "sneakers",
+            "belts", "hats", "blankets", "pillows", "bedsheets"
         ],
-        "office": [
-            "laptop", "keyboard", "mouse", "cell phone", "phone", "tablet",
-            "monitor", "charger", "cable", "headphones", "book", "notebook",
-            "paper", "pen", "pencil", "printer", "camera"
-        ],
-        "living room": [
-            "tv", "remote", "speaker", "chair", "couch", "sofa",
-            "lamp", "vase", "frame", "picture frame", "clock"
-        ],
+
         "bathroom": [
-            "towel"
+            "toothbrushes", "toothpaste", "shampoos", "soaps",
+            "hair dryers", "toilet paper", "towels"
         ],
+
+        "office": [
+            "laptops", "keyboards", "mice", "chargers", "cables",
+            "headphones", "books", "notebooks", "documents", "folders"
+        ],
+
+        "living room": [
+            "remotes", "speakers", "lamps", "picture frames",
+            "candles", "vases", "decorations"
+        ],
+
         "kids room": [
-            "toy", "teddy bear"
+            "toys", "dolls", "teddy bears", "legos"
         ],
+
         "storage": [
-            "backpack", "handbag", "bag", "box", "umbrella"
+            "backpacks", "handbags", "suitcases", "umbrellas", "bags"
         ]
     }
 
     fragile_objects = [
-        "plate", "plates", "bowl", "bowls", "cup", "cups", "glass", "glasses",
-        "wine glass", "bottle", "vase", "tv", "laptop", "cell phone",
-        "phone", "tablet", "monitor", "camera", "lamp", "frame",
-        "picture frame"
+        "plates", "bowls", "cups", "glasses", "mugs",
+        "bottles", "lamps", "picture frames", "candles",
+        "vases", "laptops", "keyboards", "mice",
+        "speakers", "headphones", "chargers", "hair dryers"
     ]
 
     valuable_objects = [
-        "tv", "laptop", "cell phone", "phone", "tablet", "monitor",
-        "keyboard", "mouse", "remote", "camera", "headphones",
-        "speaker", "charger"
+        "laptops", "keyboards", "mice", "chargers",
+        "headphones", "speakers", "hair dryers",
+        "handbags", "suitcases", "books", "notebooks",
+        "documents", "folders"
     ]
 
     suggested_fragile = any(obj in detected for obj in fragile_objects)
