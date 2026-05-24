@@ -26,6 +26,9 @@ from app.utils import now_utc, analyze_box_image
 
 app = FastAPI(title="SmartMove API")
 
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
 # ---------- MongoDB Indexes ----------
 # Run once when the server starts
 @app.on_event("startup")
