@@ -115,3 +115,17 @@ In that case, run the server with:
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 
+Checking the Server
+
+After running the server, open:
+
+http://127.0.0.1:8000/docs
+
+If the Swagger page opens, the server is running correctly.
+
+Important Notes
+
+- Make sure the `.env` file is created before running the server.
+- Do not upload the real `.env` file to GitHub.
+- If using an Android emulator, the app should connect to `http://10.0.2.2:8000`.
+- If using a real Android phone, the phone and computer must be on the same Wi-Fi network.
