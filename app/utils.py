@@ -213,10 +213,16 @@ def analyze_box_image(image_path: str) -> dict:
     destination_room = "general"
     box_name = "General Box"
 
+    room_scores = {}
+
     for room, objects in room_rules.items():
-        if any(obj in detected for obj in objects):
-            destination_room = room
-            break
+        score = sum(1 for obj in detected if obj in objects)
+        room_scores[room] = score
+
+    best_room = max(room_scores, key=room_scores.get)
+
+    if room_scores[best_room] > 0:
+        destination_room = best_room
 
     if destination_room == "kitchen":
         box_name = "Kitchen Items"
@@ -242,10 +248,21 @@ def analyze_box_image(image_path: str) -> dict:
 
     reason = f"Detected objects: {detected}" if detected else "No recognizable objects detected in the image."
 
+    ROOM_DISPLAY_NAMES = {
+    "kitchen": "Kitchen",
+    "bedroom": "Bedroom",
+    "office": "Office",
+    "living room": "Living Room",
+    "bathroom": "Bathroom",
+    "kids room": "Kids Room",
+    "storage": "Storage",
+    "general": "General"
+    }
+
     return {
         "box_name": box_name,
         "items": detected,
-        "destination_room": destination_room,
+        "destination_room": ROOM_DISPLAY_NAMES.get(destination_room, destination_room),
         "priority_color": priority_color,
         "suggested_fragile": suggested_fragile,
         "suggested_valuable": suggested_valuable,
