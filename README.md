@@ -129,4 +129,3 @@ Important Notes
 - Do not upload the real `.env` file to GitHub.
 - If using an Android emulator, the app should connect to `http://10.0.2.2:8000`.
 - If using a real Android phone, the phone and computer must be on the same Wi-Fi network.
-- .
