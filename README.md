@@ -1,46 +1,39 @@
 # SmartMove Server 🚚
 
-Backend API for the SmartMove mobile application.
+SmartMove Server is a backend service that powers the SmartMove mobile application, providing secure user management, moving project organization, QR-based box tracking, and AI-assisted image analysis.
 
-The server manages users, projects, rooms, and moving boxes, while providing secure authentication, QR-based box identification, and AI-powered image analysis.
+The system was developed to support the entire relocation workflow, from packing and categorizing boxes to locating and prioritizing them during unpacking.
 
-## Features
+## Core Functionality
 
-- User registration and login
-- JWT authentication and authorization
-- Project management
-- Room management
-- Box management
+- User authentication and authorization
+- JWT-based security
+- Project and room management
+- Box lifecycle management
 - QR identifier generation and lookup
-- Search and filtering
-- Priority opening list
-- AI image analysis using YOLOWorld
-- MongoDB data storage
+- Advanced search and filtering
+- Priority-based unpacking recommendations
+- AI-powered object detection and box classification
 
-## Tech Stack
+## Technology Stack
 
 - FastAPI
+- Python
 - MongoDB
 - Motor (Async MongoDB Driver)
 - JWT Authentication
 - Passlib (Password Hashing)
-- YOLOWorld AI Model
-- Python
+- YOLOWorld (Computer Vision)
 
 ## API Documentation
 
-After running the server locally:
-
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
+- Swagger UI: `/docs`
+- ReDoc: `/redoc`
 
 ## Mobile Application
-
-Android application repository:
 
 🔗 https://github.com/nikolpinchevsky/SmartMove
 
 ## Authors
 
-- Nikol Pinchevsky
-- May Shabat
+Nikol Pinchevsky & May Shabat
